@@ -1,5 +1,7 @@
 """Parent Entity."""
 
+import re
+
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -8,6 +10,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import LiveboxDataUpdateCoordinator
+
+_MAC_RE = re.compile(r"(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}")
 
 
 class LiveboxEntity(CoordinatorEntity[LiveboxDataUpdateCoordinator]):
@@ -46,6 +50,12 @@ class LiveboxEntity(CoordinatorEntity[LiveboxDataUpdateCoordinator]):
     def _client_device_info(self, device_key: str, name: str | None) -> DeviceInfo:
         """Return the device info of a Livebox client, linked to its parent."""
         device_info = DeviceInfo(name=name, identifiers={(DOMAIN, device_key)})
+        # A standard MAC connection links clients to other integrations' devices
+        # without changing their Livebox identifiers or parent topology.
+        if isinstance(device_key, str) and _MAC_RE.fullmatch(device_key):
+            device_info["connections"] = {
+                (dr.CONNECTION_NETWORK_MAC, dr.format_mac(device_key))
+            }
         if via_device_id := self.coordinator.get_parent_device_id(device_key):
             device_info["via_device_id"] = via_device_id
         return device_info
